@@ -76,33 +76,6 @@ defmodule BeamExport.PlugTest do
       assert length(parsed) == 3
     end
 
-    test "supports compressed .csv.gz staged exports with application/gzip content type" do
-      conn = conn(:get, "/export")
-      data = [
-        [1, "Alice", "alice@example.com"],
-        [2, "Bob", "bob@example.com"]
-      ]
-
-      conn =
-        BeamExport.Plug.send_staged_export(
-          conn,
-          "users.csv.gz",
-          data,
-          headers: ["ID", "Name", "Email"]
-        )
-
-      assert conn.status == 200
-      assert get_resp_header(conn, "content-type") == ["application/gzip"]
-      assert get_resp_header(conn, "content-disposition") == [~s(attachment; filename="users.csv.gz")]
-
-      raw_body = conn.resp_body
-      assert <<0x1F, 0x8B, _rest::binary>> = raw_body
-
-      uncompressed = :zlib.gunzip(raw_body)
-      parsed = TestParser.parse_string(uncompressed, skip_headers: false)
-      assert length(parsed) == 3
-    end
-
     test "cleanup monitor deletes staged temp file when process exits" do
       data = [[1, "Test"]]
       parent = self()

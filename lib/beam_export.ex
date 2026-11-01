@@ -68,27 +68,16 @@ defmodule BeamExport do
     Telemetry.start(:iodata, opts)
 
     try do
-      stream = to_stream(source, opts)
+      stream_with_counts = ExportStream.build_with_counts(source, opts)
 
-      # Collect all chunks into iodata
-      iodata = Enum.to_list(stream)
-      total_bytes = IO.iodata_length(iodata)
+      {reversed_chunks, total_rows, total_bytes} =
+        Enum.reduce(stream_with_counts, {[], 0, 0}, fn {:chunk, rows, chunk},
+                                                       {acc, r_acc, b_acc} ->
+          bytes = IO.iodata_length(chunk)
+          {[chunk | acc], r_acc + rows, b_acc + bytes}
+        end)
 
-      # Determine row count:
-      headers = Keyword.get(opts, :headers)
-      header_offset = if is_list(headers) and headers != [], do: 1, else: 0
-
-      total_rows =
-        cond do
-          is_list(source) ->
-            length(source) + header_offset
-
-          is_struct(source, Range) ->
-            Range.size(source) + header_offset
-
-          true ->
-            count_lines_in_iodata(iodata)
-        end
+      iodata = Enum.reverse(reversed_chunks)
 
       meta = %{
         rows: total_rows,
@@ -102,15 +91,6 @@ defmodule BeamExport do
       e ->
         Telemetry.exception(:iodata, start_time, e, __STACKTRACE__, opts)
         reraise e, __STACKTRACE__
-    end
-  end
-
-  defp count_lines_in_iodata(iodata) do
-    bin = IO.iodata_to_binary(iodata)
-
-    case bin do
-      "" -> 0
-      _ -> length(String.split(bin, ~r/\r\n|\n/, trim: true))
     end
   end
 end

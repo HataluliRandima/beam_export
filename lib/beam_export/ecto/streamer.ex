@@ -54,6 +54,9 @@ defmodule BeamExport.Ecto.Streamer do
   end
 
   defp run_worker_loop(repo, query, max_rows, timeout, parent, ref) do
+    parent_mon = Process.monitor(parent)
+    idle_timeout = worker_idle_timeout(timeout)
+
     try do
       repo.transaction(
         fn ->
@@ -70,6 +73,12 @@ defmodule BeamExport.Ecto.Streamer do
 
               {:halt, ^ref} ->
                 {:halt, nil}
+
+              {:DOWN, ^parent_mon, :process, ^parent, _reason} ->
+                {:halt, nil}
+            after
+              idle_timeout ->
+                {:halt, nil}
             end
           end)
         end,
@@ -82,6 +91,9 @@ defmodule BeamExport.Ecto.Streamer do
         send(parent, {:error, ref, e, __STACKTRACE__})
     end
   end
+
+  defp worker_idle_timeout(timeout) when is_integer(timeout) and timeout > 0, do: timeout
+  defp worker_idle_timeout(_other), do: 30_000
 
   defp next_batch(%{pid: pid, ref: ref} = state) do
     receive do
@@ -97,6 +109,9 @@ defmodule BeamExport.Ecto.Streamer do
 
           {:error, ^ref, error, stack} ->
             reraise error, stack
+
+          {:EXIT, ^pid, reason} ->
+            exit(reason)
         end
 
       {:done, ^ref} ->
@@ -104,18 +119,21 @@ defmodule BeamExport.Ecto.Streamer do
 
       {:error, ^ref, error, stack} ->
         reraise error, stack
+
+      {:EXIT, ^pid, reason} ->
+        exit(reason)
     end
   end
 
   defp stop_worker(%{pid: pid, ref: ref}) do
     if Process.alive?(pid) do
-      send(pid, {:halt, ref})
       Process.unlink(pid)
+      send(pid, {:halt, ref})
 
       receive do
         {:done, ^ref} -> :ok
       after
-        200 ->
+        500 ->
           Process.exit(pid, :kill)
       end
     end

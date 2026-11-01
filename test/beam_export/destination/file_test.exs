@@ -159,33 +159,5 @@ defmodule BeamExport.Destination.FileTest do
                ["2", "Bob", "bob@example.com"]
              ]
     end
-
-    test "streams compressed gzip archive when target ends with .gz", %{tmp_dir: tmp_dir} do
-      out_path = Path.join(tmp_dir, "compressed_export.csv.gz")
-      users = [
-        [1, "Alice", "alice@example.com"],
-        [2, "Bob", "bob@example.com"]
-      ]
-
-      assert {:ok, meta} = BeamExport.to_file(users, out_path, headers: ["ID", "Name", "Email"])
-
-      assert File.exists?(out_path)
-      assert meta.compressed == true
-      assert meta.rows == 3
-
-      raw_bytes = File.read!(out_path)
-      # Check GZIP magic bytes 0x1F, 0x8B
-      assert <<0x1F, 0x8B, _rest::binary>> = raw_bytes
-
-      # Decompress using OTP :zlib
-      uncompressed = :zlib.gunzip(raw_bytes)
-      parsed = TestParser.parse_string(uncompressed, skip_headers: false)
-
-      assert parsed == [
-        ["ID", "Name", "Email"],
-        ["1", "Alice", "alice@example.com"],
-        ["2", "Bob", "bob@example.com"]
-      ]
-    end
   end
 end

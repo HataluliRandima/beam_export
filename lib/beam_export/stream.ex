@@ -9,33 +9,34 @@ defmodule BeamExport.Stream do
   @default_chunk_size 500
 
   @doc """
-  Builds a lazy `Stream` of `iodata` chunks from any enumerable or Ecto source.
+  Builds a stream emitting `{:chunk, row_count, iodata}` tuples.
+  Used internally by sinks to accurately track logical row counts
+  even when fields contain embedded multiline text.
+  """
+  @spec build_with_counts(Enumerable.t() | {module(), Ecto.Queryable.t()}, keyword()) ::
+          Enumerable.t()
+  def build_with_counts(source, opts \\ [])
 
-  ## Options
-    * `:headers` - list of column headers (strings or atoms) to prepend as the first row.
-    * `:mapper` - a function `(term -> [term])` mapping each record to a row list.
-      Defaults to identity.
-    * `:chunk_size` - number of rows to batch per encoded chunk. Defaults to `500`.
-    * `:separator` - CSV delimiter string. Defaults to `","`.
-    * `:line_terminator` - line ending string. Defaults to `"\\r\\n"`.
-    * `:sanitize_formulas` - boolean to prevent CSV formula injection. Defaults to `false`.
-    * `:max_rows` - Ecto batch size when source is `{Repo, query}`. Defaults to `500`.
-    * `:timeout` - Ecto transaction timeout. Defaults to `:infinity`.
+  def build_with_counts({repo, query}, opts) when is_atom(repo) do
+    BeamExport.Ecto.stream(repo, query, opts)
+    |> build_enumerable_counts_stream(opts)
+  end
+
+  def build_with_counts(enumerable, opts) do
+    build_enumerable_counts_stream(enumerable, opts)
+  end
+
+  @doc """
+  Builds a lazy `Stream` of `iodata` chunks from any enumerable or Ecto source.
   """
   @spec build(Enumerable.t() | {module(), Ecto.Queryable.t()}, keyword()) :: Enumerable.t()
-  def build(source, opts \\ [])
-
-  # When source is {Repo, query}, delegate to Ecto stream
-  def build({repo, query}, opts) when is_atom(repo) do
-    BeamExport.Ecto.stream(repo, query, opts)
-    |> build_enumerable_stream(opts)
+  def build(source, opts \\ []) do
+    source
+    |> build_with_counts(opts)
+    |> Stream.map(fn {:chunk, _count, iodata} -> iodata end)
   end
 
-  def build(enumerable, opts) do
-    build_enumerable_stream(enumerable, opts)
-  end
-
-  defp build_enumerable_stream(enumerable, opts) do
+  defp build_enumerable_counts_stream(enumerable, opts) do
     chunk_size = Keyword.get(opts, :chunk_size, @default_chunk_size)
     headers = Keyword.get(opts, :headers)
     mapper = Keyword.get(opts, :mapper)
@@ -44,7 +45,9 @@ defmodule BeamExport.Stream do
       enumerable
       |> Stream.map(&safe_map(&1, mapper, headers))
       |> Stream.chunk_every(chunk_size)
-      |> Stream.map(&Encoder.encode_chunk(&1, opts))
+      |> Stream.map(fn batch ->
+        {:chunk, length(batch), Encoder.encode_chunk(batch, opts)}
+      end)
 
     case headers do
       nil ->
@@ -55,7 +58,7 @@ defmodule BeamExport.Stream do
 
       headers when is_list(headers) ->
         header_chunk = Encoder.encode_row(headers, opts)
-        Stream.concat([[header_chunk]], data_stream)
+        Stream.concat([{:chunk, 1, header_chunk}], data_stream)
     end
   end
 

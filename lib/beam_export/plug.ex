@@ -41,11 +41,11 @@ defmodule BeamExport.Plug do
   def send_staged_export(conn, filename, source, opts \\ []) do
     tmp_dir = Keyword.get(opts, :tmp_dir, System.tmp_dir!())
     random_id = :crypto.strong_rand_bytes(12) |> Base.encode16(case: :lower)
-    safe_filename = sanitize_filename(filename)
-    tmp_path = Path.join(tmp_dir, "beam_export_#{random_id}_#{safe_filename}")
+    fs_filename = sanitize_fs_filename(filename)
+    tmp_path = Path.join(tmp_dir, "beam_export_#{random_id}_#{fs_filename}")
 
     default_type =
-      if String.ends_with?(safe_filename, ".gz") or Keyword.get(opts, :compress) in [:gzip, true] do
+      if String.ends_with?(filename, ".gz") or Keyword.get(opts, :compress) in [:gzip, true] do
         "application/gzip"
       else
         @default_content_type
@@ -69,10 +69,7 @@ defmodule BeamExport.Plug do
         conn
         |> Plug.Conn.put_private(:beam_export_file, tmp_path)
         |> Plug.Conn.put_resp_content_type(content_type, charset)
-        |> Plug.Conn.put_resp_header(
-          "content-disposition",
-          ~s(attachment; filename="#{safe_filename}")
-        )
+        |> Plug.Conn.put_resp_header("content-disposition", build_content_disposition(filename))
         |> Plug.Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
         |> Plug.Conn.send_file(200, tmp_path)
 
@@ -101,15 +98,11 @@ defmodule BeamExport.Plug do
   def send_chunked_export(conn, filename, source, opts \\ []) do
     content_type = Keyword.get(opts, :content_type, @default_content_type)
     charset = Keyword.get(opts, :charset, "utf-8")
-    safe_filename = sanitize_filename(filename)
 
     conn =
       conn
       |> Plug.Conn.put_resp_content_type(content_type, charset)
-      |> Plug.Conn.put_resp_header(
-        "content-disposition",
-        ~s(attachment; filename="#{safe_filename}")
-      )
+      |> Plug.Conn.put_resp_header("content-disposition", build_content_disposition(filename))
       |> Plug.Conn.put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
       |> Plug.Conn.send_chunked(200)
 
@@ -130,10 +123,33 @@ defmodule BeamExport.Plug do
     end)
   end
 
-  defp sanitize_filename(name) do
-    name
+  # Builds standard RFC 6266 / RFC 5987 Content-Disposition header.
+  # For pure ASCII names, outputs `attachment; filename="name.csv"`.
+  # For Unicode names, provides ASCII fallback and UTF-8 encoded parameter:
+  # `attachment; filename="fallback.csv"; filename*=UTF-8''encoded.csv`
+  defp build_content_disposition(raw_filename) do
+    clean_name =
+      raw_filename
+      |> to_string()
+      |> String.replace(~r/[\r\n\0"]/, "")
+      |> Path.basename()
+
+    if clean_name =~ ~r/^[a-zA-Z0-9\.\-_]+$/ do
+      ~s(attachment; filename="#{clean_name}")
+    else
+      ascii_fallback = String.replace(clean_name, ~r/[^a-zA-Z0-9\.\-_]/u, "_")
+      encoded_utf8 = URI.encode(clean_name, &URI.char_unreserved?/1)
+      ~s(attachment; filename="#{ascii_fallback}"; filename*=UTF-8''#{encoded_utf8})
+    end
+  end
+
+  # Generates an ASCII-safe filename for local filesystem storage
+  defp sanitize_fs_filename(raw_filename) do
+    raw_filename
+    |> to_string()
+    |> String.replace(~r/[\r\n\0]/, "")
     |> Path.basename()
-    |> String.replace(~r/[^\w\.\-\_]/, "_")
+    |> String.replace(~r/[^a-zA-Z0-9\.\-_]/u, "_")
   end
 
   defp spawn_cleanup_monitor(caller_pid, file_path) do

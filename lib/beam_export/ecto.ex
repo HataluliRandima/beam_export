@@ -4,9 +4,17 @@ defmodule BeamExport.Ecto do
   """
 
   @doc """
-  Streams an Ecto query using `Repo.stream/2` wrapped inside a managed `Repo.transaction/2`.
+  Streams an Ecto query. If the caller process is already inside a transaction,
+  it streams directly via `Repo.stream/2` to avoid checking out a second connection.
+  Otherwise, it wraps the stream in a managed `Repo.transaction/2` resource.
   """
   def stream(repo, query, opts \\ []) do
-    BeamExport.Ecto.Streamer.build(repo, query, opts)
+    if repo.in_transaction?() do
+      validated_query = BeamExport.Ecto.Streamer.validate_query!(query)
+      max_rows = Keyword.get(opts, :max_rows, 500)
+      repo.stream(validated_query, max_rows: max_rows)
+    else
+      BeamExport.Ecto.Streamer.build(repo, query, opts)
+    end
   end
 end

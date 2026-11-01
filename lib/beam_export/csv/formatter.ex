@@ -51,11 +51,19 @@ defmodule BeamExport.CSV.Formatter do
     end
   end
 
-  # Prevent CSV injection: if a cell starts with =, +, -, @, \t, or \r,
-  # spreadsheet applications (Excel, Calc) may interpret it as a formula or command.
-  defp sanitize_formula(<<char, _rest::binary>> = val)
-       when char in [?=, ?+, ?-, ?@, ?\t, ?\r] do
-    "'" <> val
+  # Prevent CSV injection: if a cell starts with =, +, -, @, \t, or \r (including
+  # after leading whitespace), spreadsheet applications (Excel, Calc) may interpret
+  # it as an executable formula.
+  defp sanitize_formula(val) when is_binary(val) do
+    trimmed = String.trim_leading(val)
+
+    case trimmed do
+      <<char, _rest::binary>> when char in [?=, ?+, ?-, ?@, ?\t, ?\r] ->
+        "'" <> val
+
+      _ ->
+        val
+    end
   end
 
   defp sanitize_formula(val), do: val

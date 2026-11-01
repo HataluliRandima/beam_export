@@ -6,7 +6,7 @@
 
 A production-grade, memory-bounded streaming data export engine for Elixir.
 
-Export large datasets from **Ecto queries** or **arbitrary enumerables** to **RFC 4180-compliant CSV files** and **HTTP downloads** with strictly constant $O(1)$ memory usage and built-in database connection pool protection.
+Export large datasets from **Ecto queries** or **arbitrary enumerables** to **RFC 4180-compliant CSV files** and **HTTP downloads** with bounded memory usage ($O(\text{chunk\_size} \times \text{max\_row\_size})$) and built-in database connection pool protection.
 
 ---
 
@@ -68,11 +68,13 @@ STAGE 2: SERVE OVER HTTP WITHOUT HOLDING DATABASE RESOURCES  │
 ```
 
 ### Why use `beam_export` instead of hand-rolling code?
-* 🚀 **50x Lower Process Memory:** Benchmarks prove memory stays flat at **~1.06 MB** regardless of whether exporting 1,000 or 100,000 records.
-* 🛡️ **Database Connection Safety:** Turns long web downloads into fast 1-second database dumps, releasing pool connections immediately.
+* 🚀 **Bounded Process Memory:** Process heap remains bounded to active chunk size ($O(\text{chunk\_size} \times \text{max\_row\_size})$, ~1.06 MB for 100,000 standard records) rather than scaling linearly with total row count.
+* 🛡️ **Database Connection Safety:** Turns long web downloads into fast 1-second database dumps, releasing pool connections immediately. Safe inside nested `Repo.transaction` blocks.
 * ⚡ **High Throughput:** Encodes nested `iodata` chunks directly, exceeding **130,000 rows/second** on standard hardware.
-* 🧹 **Zero Leaked Resources:** Ephemeral monitor processes guarantee temporary files and database transactions are cleaned up even if the client disconnects or crashes.
-* 🔒 **Security Hardened:** Built-in formula sanitization prevents CSV injection attacks (`=`, `+`, `-`, `@`) in spreadsheet applications.
+* 💾 **Atomic Filesystem Writes:** Default `atomic: true` writes to temporary files and renames on success, guaranteeing zero corrupt partial files on failure.
+* 🌐 **Internationalization Support:** Preserves UTF-8 Unicode filenames in HTTP downloads via RFC 5987 / RFC 6266 (`filename*=UTF-8''...`).
+* 🧹 **Zero Leaked Resources:** Ephemeral monitor processes and timeouts guarantee temporary files and database transactions are cleaned up even if the client disconnects or crashes.
+* 🔒 **Security Hardened:** Whitespace-aware formula sanitization prevents CSV injection attacks (`=`, `+`, `-`, `@`) in spreadsheet applications.
 * 📡 **Production Observability:** Built-in `:telemetry` events for rows, bytes, and durations with automatic PII sanitization.
 
 ---
