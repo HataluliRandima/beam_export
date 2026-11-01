@@ -61,7 +61,14 @@ defmodule BeamExport.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "CHANGELOG.md", "LICENSE"]
+      extras: [
+        "README.md",
+        "ROADMAP.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        "docs/benchmark-audit.md": [title: "Benchmark Audit"],
+        "docs/adversarial-review-final.md": [title: "Adversarial Review"]
+      ]
     ]
   end
 end

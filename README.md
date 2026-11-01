@@ -195,7 +195,7 @@ Empirical testing on Linux (Erlang/OTP 26, Elixir 1.17) comparing traditional in
 | **100,000 rows** | Traditional (`Repo.all`) | 53.58 MB | 747 ms | Baseline |
 | **100,000 rows** | **`BeamExport`** | **1.06 MB** | **758 ms** | **50.5x lower** |
 
-*Notice:* As dataset size expands, `Repo.all` memory scales linearly ($O(N)$), while `BeamExport` maintains a **strictly flat $O(1)$ memory footprint of ~1.06 MB**.
+*Notice:* As dataset size expands, `Repo.all` memory scales linearly ($O(N)$), while `BeamExport` maintains a **bounded chunk memory footprint (~1.06 MB)** independent of the total row count (see [docs/benchmark-audit.md](docs/benchmark-audit.md)).
 
 To run benchmarks locally:
 ```bash
@@ -223,6 +223,17 @@ MIX_ENV=test mix run bench/export_bench.exs
 
 1. **Preloads Are Not Supported:** Relational database cursors (`Repo.stream/2`) cannot preload associations. Attempting to stream a query with `preload: [...]` will raise `BeamExport.PreloadError`. Use SQL joins (`join: assoc(u, :company)`) or select required fields directly.
 2. **When NOT to use Direct Chunked Streaming:** Direct HTTP chunking (`BeamExport.Plug.send_chunked_export/4`) should only be used in low-latency internal microservices. For public-facing web applications, always use `BeamExport.Plug.send_staged_export/4` to prevent slow clients from exhausting your database connection pool.
+
+---
+
+## 🗺️ Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for full architectural designs and timelines. Key upcoming milestones:
+
+- **v0.2.0 — Cloud Object Storage Sinks (`BeamExport.Destination.S3`):** Direct multipart streaming into AWS S3, Google Cloud Storage, or Cloudflare R2 without intermediate local disk writes.
+- **v0.3.0 — Additional Formats (NDJSON & Parquet):** Stream newline-delimited JSON (`.ndjson` / `.jsonl`) via `Jason` and columnar Apache Parquet.
+- **v0.4.0 — Oban Background Worker Blueprint:** Official `BeamExport.Oban.Worker` behavior for async background export jobs, live Phoenix LiveView progress tracking, and signed download URLs.
+- **Tooling — Dialyzer in CI:** Automated static typing and PLT caching in GitHub Actions.
 
 ---
 
