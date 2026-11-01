@@ -121,3 +121,4 @@ Ensure comprehensive static type safety and contract verification across all opt
 - Add `dialyxir` to `mix.exs` `:dev` and `:test` environments.
 - Generate and cache Dialyzer Persistent Lookup Tables (PLTs) in GitHub Actions (`.github/workflows/ci.yml`).
 - Enforce clean typespec verification with zero Dialyzer warnings in pull request checks.
+
