@@ -60,3 +60,4 @@ defmodule BeamExport.CSV.Formatter do
 
   defp sanitize_formula(val), do: val
 end
+

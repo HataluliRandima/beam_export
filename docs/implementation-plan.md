@@ -154,3 +154,4 @@ This implementation plan breaks the delivery of `beam_export` into seven indepen
 * **Acceptance Criteria:**
   - Memory consumption of `BeamExport` remains flat (< 30 MB), whereas traditional `Repo.all` grows linearly with row count.
 * **Risks:** Benchmarking noise in containerized/virtualized environments. Mitigated by averaging multiple runs and reporting median values.
+

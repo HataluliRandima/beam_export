@@ -163,3 +163,4 @@ However, we **MUST NOT** build a library whose primary recommendation is piping 
 3. **Comprehensive Observability:** First-class `:telemetry` instrumentation out of the box to track rows, bytes, DB duration, and total transfer time.
 
 This foundation ensures `beam_export` is not just another utility wrapper, but a production-grade library that senior engineers can confidently adopt in high-load systems.
+

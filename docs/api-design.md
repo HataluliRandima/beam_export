@@ -222,3 +222,4 @@ Export functions adhere to strict return contracts:
 * **File Destination Failures:** If a target path cannot be written to (e.g. `{:error, :eacces}` or `{:error, :enospc}`), `to_file/3` returns `{:error, {:file_error, posix_reason}}`.
 * **Database Failures:** If the Ecto query fails, or transaction times out, the error is unwrapped and returned as `{:error, {:ecto_error, reason}}`.
 * **Mapper Exceptions:** If a user-supplied mapper function raises an exception, the pipeline catches it, triggers resource cleanup (rolling back transaction, deleting temp file), and raises a descriptive `BeamExport.MappingError` with record context.
+

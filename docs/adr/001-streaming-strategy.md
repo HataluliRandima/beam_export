@@ -183,3 +183,4 @@ We decide to build `beam_export` around a **modular, destination-driven streamin
 | **Client TTFB** | Instantaneous | Short staging delay | Asynchronous (Polling/Email) |
 | **Disk Space Needed** | None | Ephemeral (`/tmp`) | Ephemeral + Object Storage |
 | **Production Safety** | ⚠️ High Risk | ✅ Production-Grade | ✅ Production-Grade |
+

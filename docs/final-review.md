@@ -84,3 +84,4 @@
 ## 7. Conclusion
 
 `beam_export` represents a high-caliber addition to the Elixir open-source ecosystem. It solves a real, pervasive production failure mode with technical rigor, idiomatic design, and empirical verification. It is recommended for immediate Hex release under version `0.1.0`.
+

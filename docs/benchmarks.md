@@ -92,3 +92,4 @@ Because `BeamExport.CSV.Encoder` constructs `iodata` directly rather than concat
 1. **Database Adapter Cursor Support:** The benchmark utilized SQLite with WAL mode. In PostgreSQL (`postgrex`), `Repo.stream` utilizes cursor fetches (`FETCH 1000 FROM cursor`). Network latency between the BEAM node and PostgreSQL server will dictate the query fetch speed.
 2. **Disk I/O:** `BeamExport.to_file` achieves maximum performance by using `:delayed_write` on the underlying Erlang file port. Ensure the host system has adequate disk throughput and ephemeral `/tmp` storage.
 3. **Database Connection Checkout:** While streaming, 1 database connection is checked out for the query execution time (e.g. ~750ms for 100k rows). Always use **Staged HTTP Export** (`BeamExport.Plug.send_staged_export`) so slow HTTP download times do not prolong connection checkouts.
+

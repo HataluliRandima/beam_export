@@ -10,3 +10,4 @@ defmodule BeamExport.Ecto do
     BeamExport.Ecto.Streamer.build(repo, query, opts)
   end
 end
+

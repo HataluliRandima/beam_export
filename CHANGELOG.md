@@ -37,3 +37,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/implementation-plan.md` (TDD milestone breakdown).
   - `docs/benchmarks.md` (memory and throughput profiling across 10k–100k rows).
   - `docs/final-review.md` (Hex package maintainer audit).
+

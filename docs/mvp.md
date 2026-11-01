@@ -90,3 +90,4 @@ The following capabilities are explicitly deferred to maintain a lean, hardened 
 | **Database Pool Protection** | Staged exports hold database connections for only the query execution time, not the HTTP download time. |
 | **Test Coverage** | Comprehensive automated test suite covering unit tests, RFC 4180 edge cases, database failures, and client disconnects. |
 | **Zero Compiler Warnings** | Clean compilation under Elixir 1.14 through 1.17. |
+
