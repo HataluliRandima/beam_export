@@ -8,7 +8,7 @@ defmodule BeamExport.MixProject do
     [
       app: :beam_export,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       package: package(),
