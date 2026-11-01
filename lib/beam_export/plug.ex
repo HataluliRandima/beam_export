@@ -40,12 +40,25 @@ defmodule BeamExport.Plug do
         ) :: Plug.Conn.t()
   def send_staged_export(conn, filename, source, opts \\ []) do
     tmp_dir = Keyword.get(opts, :tmp_dir, System.tmp_dir!())
-    content_type = Keyword.get(opts, :content_type, @default_content_type)
-    charset = Keyword.get(opts, :charset, "utf-8")
-
     random_id = :crypto.strong_rand_bytes(12) |> Base.encode16(case: :lower)
     safe_filename = sanitize_filename(filename)
     tmp_path = Path.join(tmp_dir, "beam_export_#{random_id}_#{safe_filename}")
+
+    default_type =
+      if String.ends_with?(safe_filename, ".gz") or Keyword.get(opts, :compress) in [:gzip, true] do
+        "application/gzip"
+      else
+        @default_content_type
+      end
+
+    content_type = Keyword.get(opts, :content_type, default_type)
+
+    charset =
+      if content_type == "application/gzip" do
+        Keyword.get(opts, :charset, nil)
+      else
+        Keyword.get(opts, :charset, "utf-8")
+      end
 
     # Ensure cleanup when request process terminates (normal, crash, or client disconnect)
     spawn_cleanup_monitor(self(), tmp_path)

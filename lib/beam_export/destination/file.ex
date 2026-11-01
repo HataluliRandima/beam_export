@@ -1,7 +1,7 @@
 defmodule BeamExport.Destination.File do
   @moduledoc """
-  Streams export data directly into files with buffered I/O, atomic file writing,
-  and telemetry instrumentation.
+  Streams export data directly into files with buffered I/O, optional streaming
+  Gzip compression, atomic file writing, and telemetry instrumentation.
   """
 
   alias BeamExport.Stream, as: ExportStream
@@ -14,6 +14,8 @@ defmodule BeamExport.Destination.File do
     * `:atomic` - when `true`, streams into a temporary file in the target directory
       and atomically renames it to `target_path` upon successful completion.
       Defaults to `false`.
+    * `:compress` - when `:gzip` or `true`, streams through Gzip compression on-the-fly.
+      Automatically enabled if `target_path` ends with `.gz`. Defaults to `false`.
     * `:headers` - list of headers to prepend.
     * `:mapper` - mapper function.
     * `:separator` - CSV delimiter. Defaults to `","`.
@@ -33,6 +35,7 @@ defmodule BeamExport.Destination.File do
 
     target_dir = Path.dirname(target_path)
     atomic? = Keyword.get(opts, :atomic, false)
+    compress? = should_compress?(target_path, opts)
 
     write_path =
       if atomic? do
@@ -48,19 +51,28 @@ defmodule BeamExport.Destination.File do
       # Build the lazy stream
       stream = ExportStream.build(source, opts)
 
-      # Open file with delayed_write buffer for peak write throughput
-      file = File.open!(write_path, [:write, :binary, :delayed_write])
+      # Open Erlang file port with delayed_write and optional native gzip compression
+      open_modes =
+        if compress? do
+          [:write, :compressed, :delayed_write]
+        else
+          [:write, :delayed_write]
+        end
 
-      total_bytes =
+      {:ok, file} = :file.open(String.to_charlist(write_path), open_modes)
+
+      # Single-pass execution: write chunks, compute row counts in-memory without secondary disk I/O
+      {total_rows, total_bytes} =
         try do
-          Enum.reduce(stream, 0, fn chunk, bytes_acc ->
-            :ok = IO.binwrite(file, chunk)
+          Enum.reduce(stream, {0, 0}, fn chunk, {rows_acc, bytes_acc} ->
+            :ok = :file.write(file, chunk)
             bytes = IO.iodata_length(chunk)
-            Telemetry.chunk(:file, 0, bytes, opts)
-            bytes_acc + bytes
+            lines = count_newlines(chunk, 0)
+            Telemetry.chunk(:file, lines, bytes, opts)
+            {rows_acc + lines, bytes_acc + bytes}
           end)
         after
-          File.close(file)
+          :file.close(file)
         end
 
       # If atomic writing was requested, atomically rename the temp file to the final path
@@ -68,26 +80,19 @@ defmodule BeamExport.Destination.File do
         File.rename!(write_path, target_path)
       end
 
-      # Determine row count:
-      headers = Keyword.get(opts, :headers)
-      header_offset = if is_list(headers) and headers != [], do: 1, else: 0
-
-      total_rows =
-        cond do
-          is_list(source) ->
-            length(source) + header_offset
-
-          is_struct(source, Range) ->
-            Range.size(source) + header_offset
-
-          true ->
-            count_lines_in_file(target_path)
+      # For compressed files, the on-disk byte size will be smaller than the uncompressed stream bytes
+      final_bytes =
+        if compress? and File.exists?(target_path) do
+          File.stat!(target_path).size
+        else
+          total_bytes
         end
 
       meta = %{
         path: target_path,
         rows: total_rows,
-        bytes: total_bytes,
+        bytes: final_bytes,
+        compressed: compress?,
         duration: System.monotonic_time() - start_time
       }
 
@@ -106,20 +111,28 @@ defmodule BeamExport.Destination.File do
     end
   end
 
+  defp should_compress?(path, opts) do
+    case Keyword.get(opts, :compress) do
+      :gzip -> true
+      true -> true
+      false -> false
+      nil -> String.ends_with?(path, ".gz")
+    end
+  end
+
   defp cleanup_temp_file(path, true) do
     if File.exists?(path), do: File.rm(path)
   end
 
   defp cleanup_temp_file(_path, _atomic), do: :ok
 
-  defp count_lines_in_file(path) do
-    path
-    |> Elixir.File.stream!([], 64 * 1024)
-    |> Stream.map(fn chunk ->
-      chunk
-      |> :binary.matches(["\n"])
-      |> length()
-    end)
-    |> Enum.sum()
+  # Fast newline counter across nested iodata in L1/L2 cache, avoiding secondary disk reads
+  defp count_newlines([], acc), do: acc
+  defp count_newlines([head | tail], acc), do: count_newlines(tail, count_newlines(head, acc))
+
+  defp count_newlines(bin, acc) when is_binary(bin) do
+    acc + length(:binary.matches(bin, "\n"))
   end
+
+  defp count_newlines(_other, acc), do: acc
 end

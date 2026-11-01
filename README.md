@@ -156,6 +156,26 @@ stream
 |> Stream.run()
 ```
 
+### 4. Streaming Gzip Compression on the Fly
+
+Pass a filename ending with `.gz` or `compress: :gzip` to stream compressed `.csv.gz` files with zero external dependencies:
+
+```elixir
+# File export:
+{:ok, meta} = BeamExport.to_file(
+  {MyApp.Repo, query},
+  "exports/users.csv.gz",
+  headers: ["ID", "Name", "Email"],
+  mapper: fn u -> [u.id, u.name, u.email] end
+)
+
+# Phoenix download (automatically sends Content-Type: application/gzip):
+BeamExport.Plug.send_staged_export(conn, "users.csv.gz", {MyApp.Repo, query},
+  headers: ["ID", "Name", "Email"],
+  mapper: fn u -> [u.id, u.name, u.email] end
+)
+```
+
 ---
 
 ## ⚡ Performance & Benchmarks

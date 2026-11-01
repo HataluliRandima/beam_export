@@ -26,4 +26,3 @@ defmodule BeamExport.PreloadError do
     %__MODULE__{message: msg}
   end
 end
-

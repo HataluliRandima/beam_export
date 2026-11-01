@@ -61,7 +61,7 @@ defmodule BeamExport.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md"]
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"]
     ]
   end
 end

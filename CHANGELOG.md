@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable batching via `:max_rows` (default: 500) and transaction timeouts.
 - **File Destination (`BeamExport.to_file/3`):**
   - Buffered file writing using `:delayed_write` for maximum disk throughput.
+  - Native streaming Gzip compression (`compress: :gzip` or `.csv.gz` auto-detection) powered by OTP `:zlib`.
+  - Single-pass row and byte accumulation in CPU cache, eliminating secondary file disk reads.
   - Atomic write option (`atomic: true`) with automated temporary file cleanup on failure.
-  - Metadata reporting row counts, byte counts, and duration.
+  - Metadata reporting row counts, byte counts, compression status, and duration.
 - **Plug & Phoenix Web Integration (`BeamExport.Plug`):**
   - Staged HTTP file download (`send_staged_export/4`) releasing database connections in seconds to protect pools against slow clients.
   - Ephemeral process cleanup monitor guaranteeing temporary file removal on request completion or client disconnect.

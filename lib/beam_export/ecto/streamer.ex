@@ -1,6 +1,6 @@
 defmodule BeamExport.Ecto.Streamer do
   @moduledoc """
-  Encapsulates `Ecto.Repo.stream/2` within a supervised streaming resource.
+  Encapsulates Ecto repository query streaming within a supervised streaming resource.
   """
 
   alias BeamExport.PreloadError
@@ -133,4 +133,3 @@ defmodule BeamExport.Ecto.Streamer do
     end
   end
 end
-
