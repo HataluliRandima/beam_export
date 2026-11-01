@@ -137,3 +137,4 @@ The previous benchmark claimed "Strictly Flat $O(1)$ memory".
    - Properly handle `{:error, reason}` from `:file.open` and `:file.write`.
 7. **Fix BE-008 (Formula Injection):**
    - Strip leading whitespace before checking formula prefixes.
+

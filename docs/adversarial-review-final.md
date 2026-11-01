@@ -128,3 +128,4 @@ The benchmark audit in [docs/benchmark-audit.md](file:///home/hata/private_proje
 With the completion of this adversarial review and the verification of all regression tests in [test/beam_export/adversarial_test.exs](file:///home/hata/private_projects/beam_export/test/beam_export/adversarial_test.exs), all critical, high, and medium defects have been resolved.
 
 `BeamExport` is hardened against connection starvation, deadlocks, zombie processes, corrupt output, and memory bloat. It is ready for production use.
+
