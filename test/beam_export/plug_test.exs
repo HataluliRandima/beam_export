@@ -103,6 +103,57 @@ defmodule BeamExport.PlugTest do
       # Wait brief moment for the cleanup monitor to receive :DOWN and remove the file
       Process.sleep(50)
       refute File.exists?(file_path)
+      refute File.exists?(Path.dirname(file_path))
+    end
+
+    test "stages the file 0600 inside a fresh 0700 directory under :tmp_dir" do
+      import Bitwise
+
+      root =
+        Path.join(System.tmp_dir!(), "beam_export_plug_#{System.unique_integer([:positive])}")
+
+      on_exit(fn -> File.rm_rf(root) end)
+      parent = self()
+
+      spawn(fn ->
+        conn = BeamExport.Plug.send_staged_export(conn(:get, "/"), "r.csv", [[1]], tmp_dir: root)
+        path = conn.private[:beam_export_file]
+        send(parent, {:staged, path, File.stat!(path).mode, File.stat!(Path.dirname(path)).mode})
+
+        receive do
+          :exit -> :ok
+        end
+      end)
+
+      assert_receive {:staged, path, file_mode, dir_mode}, 2_000
+      assert Path.dirname(Path.dirname(path)) == root
+      assert (file_mode &&& 0o777) == 0o600
+      assert (dir_mode &&& 0o777) == 0o700
+    end
+
+    test "hostile filenames cannot escape the private directory" do
+      for name <- ["..", ".", "", "../../etc/passwd", "a/../../b.csv", "\r\nx.csv"] do
+        conn = BeamExport.Plug.send_staged_export(conn(:get, "/"), name, [[1]])
+        path = conn.private[:beam_export_file]
+        assert Path.basename(Path.dirname(path)) =~ ~r/^beam_export_[0-9a-f]{24}$/
+        assert Path.basename(path) =~ ~r/^export_[A-Za-z0-9._-]*$/
+      end
+    end
+
+    test "content type follows what was written, not just the filename" do
+      conn =
+        BeamExport.Plug.send_staged_export(conn(:get, "/"), "plain.csv.gz", [[1]],
+          compress: false
+        )
+
+      assert get_resp_header(conn, "content-type") == ["text/csv; charset=utf-8"]
+      assert conn.resp_body == "1\r\n"
+    end
+
+    test "invalid options raise before any response is sent" do
+      assert_raise ArgumentError, ~r/unknown option :tmpdir/, fn ->
+        BeamExport.Plug.send_staged_export(conn(:get, "/"), "x.csv", [[1]], tmpdir: "/tmp")
+      end
     end
   end
 
@@ -142,6 +193,40 @@ defmodule BeamExport.PlugTest do
                ["10", "Alpha"],
                ["20", "Beta"]
              ]
+    end
+  end
+end
+
+defmodule BeamExport.PlugEctoTest do
+  use BeamExport.DataCase, async: false
+  import Plug.Test
+
+  test "send_chunked_export streams an Ecto query (worker path, sandbox allowance)" do
+    insert_users(25)
+
+    conn =
+      BeamExport.Plug.send_chunked_export(
+        conn(:get, "/"),
+        "users.csv",
+        {Repo, from(u in User, order_by: u.id)},
+        headers: [:id, :name],
+        max_rows: 10,
+        chunk_size: 10
+      )
+
+    {_adapter, %{chunks: body}} = conn.adapter
+    lines = String.split(body, "\r\n", trim: true)
+    assert hd(lines) == "id,name"
+    assert length(lines) == 26
+  end
+
+  test "send_chunked_export rejects an invalid query before starting the response" do
+    assert_raise BeamExport.PreloadError, fn ->
+      BeamExport.Plug.send_chunked_export(
+        conn(:get, "/"),
+        "users.csv",
+        {Repo, from(u in User, preload: :posts)}
+      )
     end
   end
 end

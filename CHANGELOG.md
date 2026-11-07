@@ -5,38 +5,49 @@ All notable changes to `beam_export` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-11-01
+## [0.1.0] - Unreleased
+
+First public release.
 
 ### Added
-- **Core Streaming Engine (`BeamExport.to_stream/2`):**
-  - Lazy Elixir `Stream` construction emitting nested `iodata` chunks.
-  - Automatic RFC 4180 CSV serialization with quoting, CRLF/LF line endings, and custom delimiters.
-  - Type formatting for primitives, decimals, dates, times, datetimes, and atoms.
-  - Security formula sanitization (`sanitize_formulas: true`) against Excel/Calc formula injection.
-  - Automatic map key extraction when `:headers` is specified.
-- **Ecto Database Integration (`BeamExport.Ecto`):**
-  - Supervised cursor streaming (`Repo.stream/2`) with managed transactions.
-  - Automatic preload validation raising `BeamExport.PreloadError` upfront.
-  - Configurable batching via `:max_rows` (default: 500) and transaction timeouts.
-- **File Destination (`BeamExport.to_file/3`):**
-  - Buffered file writing using `:delayed_write` for maximum disk throughput.
-  - Native streaming Gzip compression (`compress: :gzip` or `.csv.gz` auto-detection) powered by OTP `:zlib`.
-  - Single-pass row and byte accumulation in CPU cache, eliminating secondary file disk reads.
-  - Atomic write option (`atomic: true`) with automated temporary file cleanup on failure.
-  - Metadata reporting row counts, byte counts, compression status, and duration.
-- **Plug & Phoenix Web Integration (`BeamExport.Plug`):**
-  - Staged HTTP file download (`send_staged_export/4`) releasing database connections in seconds to protect pools against slow clients.
-  - Ephemeral process cleanup monitor guaranteeing temporary file removal on request completion or client disconnect.
-  - Direct HTTP chunking (`send_chunked_export/4`) with socket disconnect detection (`{:error, :closed}`).
-- **Observability (`BeamExport.Telemetry`):**
-  - Standard `:telemetry` events: `[:beam_export, :export, :start]`, `:chunk`, `:stop`, and `:exception`.
-  - PII security scrubber redacting row payloads on mapping exceptions.
-- **Documentation & Research:**
-  - `docs/research.md` (ecosystem and market gap research).
-  - `docs/adr/001-streaming-strategy.md` (architectural analysis of database streaming vs slow clients).
-  - `docs/mvp.md` (scope definition).
-  - `docs/api-design.md` (public API contract).
-  - `docs/implementation-plan.md` (TDD milestone breakdown).
-  - `docs/benchmarks.md` (memory and throughput profiling across 10k–100k rows).
-  - `docs/final-review.md` (Hex package maintainer audit).
 
+- **Exports** from any `Enumerable` or `{Repo, queryable}` Ecto source:
+  - `BeamExport.to_file/3`: atomic file writes (temporary file, `fsync`, rename),
+    optional streaming gzip (`compress: true` or a `.gz` path), files created with
+    mode `0600` (`:file_mode`).
+  - `BeamExport.to_iodata/2`: in-memory exports for small datasets.
+  - `BeamExport.to_stream/2`: lazy stream of CSV `iodata` chunks.
+- **Plug/Phoenix downloads** (`BeamExport.Plug`, requires `:plug`):
+  - `send_staged_export/4` writes the export to a private (`0700`) temporary
+    directory, releases the database connection, then serves the file with
+    `send_file`. Temporary files are removed when the request process exits.
+  - `send_chunked_export/4` streams with chunked transfer encoding and stops reading
+    the source when the client disconnects.
+- **CSV encoding**: RFC 4180 quoting, custom separators, `"\r\n"` or `"\n"` line
+  terminators. Exact floats (`Float.to_string/1`), decimals in plain notation,
+  ISO 8601 dates and times, tuple rows (Ecto `select: {...}`), and map/struct records
+  read by `:headers`.
+- **Formula injection protection**, enabled by default (`sanitize_formulas: true`),
+  following the OWASP recommendation.
+- **Ecto integration**: cursor streaming with `:max_rows` batches; eager rejection of
+  preloads (`BeamExport.PreloadError`); reuses the caller's transaction when there is
+  one; uses `Repo.transact/2` on Ecto 3.13+ and `Repo.transaction/2` before.
+- **Errors**: `BeamExport.MappingError`, `BeamExport.EncodeError`,
+  `BeamExport.TimeoutError`, `BeamExport.ExportError`, `BeamExport.PreloadError`.
+  Record contents are redacted by default (`:include_record_in_errors` opts in).
+- **Option validation**: unknown options and invalid values raise `ArgumentError`.
+- **Telemetry**: `[:beam_export, :export, :start | :chunk | :stop | :exception]`
+  events from `to_file/3` and `to_iodata/2`. Exception metadata is always redacted.
+
+### Behaviour notes
+
+These describe guarantees that a pre-release audit found missing in earlier
+development snapshots:
+
+- An export that does not complete is never reported as successful. This covers
+  stalled consumers (`:consumer_timeout`), unresponsive databases (`:batch_timeout`),
+  failed commits, crashed workers, and write errors reported only when a file is
+  closed (for example a full disk).
+- A failed export never deletes a file it did not create or truncate, and never
+  deletes non-regular files.
+- `meta.rows` counts the header row.

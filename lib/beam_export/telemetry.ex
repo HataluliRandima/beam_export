@@ -1,26 +1,41 @@
 defmodule BeamExport.Telemetry do
   @moduledoc """
-  Telemetry integration for `beam_export`.
+  `:telemetry` events emitted by BeamExport.
 
-  Emits the following telemetry events:
-  * `[:beam_export, :export, :start]` - fired at the beginning of an export.
-    * Measurements: `%{system_time: integer()}`
-    * Metadata: `%{destination: atom(), format: :csv}`
-  * `[:beam_export, :export, :chunk]` - fired when a chunk of rows is encoded/written.
-    * Measurements: `%{rows: integer(), bytes: integer()}`
-    * Metadata: `%{destination: atom()}`
-  * `[:beam_export, :export, :stop]` - fired upon successful completion.
-    * Measurements: `%{duration: integer(), rows: integer(), bytes: integer()}`
-    * Metadata: `%{destination: atom(), format: :csv}`
-  * `[:beam_export, :export, :exception]` - fired when an unhandled error terminates the export.
-    * Measurements: `%{duration: integer()}`
-    * Metadata: `%{destination: atom(), kind: atom(), reason: term(), stacktrace: list(), format: :csv}`
+  Events are emitted by `BeamExport.to_file/3` (`destination: :file`, including
+  `BeamExport.Plug.send_staged_export/4`) and `BeamExport.to_iodata/2`
+  (`destination: :iodata`). `BeamExport.to_stream/2` and
+  `BeamExport.Plug.send_chunked_export/4` emit no events.
+
+  Handlers run synchronously in the process performing the export.
+
+    * `[:beam_export, :export, :start]` - an export begins (after option validation).
+      * Measurements: `%{system_time: integer()}`
+      * Metadata: `%{destination: :file | :iodata, format: :csv}`
+    * `[:beam_export, :export, :chunk]` - a chunk was written (`:file` only).
+      * Measurements: `%{rows: integer(), bytes: integer()}` - `bytes` are uncompressed
+      * Metadata: `%{destination: :file}`
+    * `[:beam_export, :export, :stop]` - the export completed successfully.
+      * Measurements: `%{duration: integer(), rows: integer(), bytes: integer()}`.
+        `duration` is in `:native` time units (convert with `System.convert_time_unit/3`),
+        `rows` includes the header row, and `bytes` is the size on disk (compressed
+        size for gzip files).
+      * Metadata: `%{destination: :file | :iodata, format: :csv}`
+    * `[:beam_export, :export, :exception]` - the export failed.
+      * Measurements: `%{duration: integer()}` (`:native` time units)
+      * Metadata: `%{destination: atom(), kind: :error, reason: Exception.t(),
+        stacktrace: list(), format: :csv}`
+
+  Exception metadata never contains record contents: `BeamExport.MappingError`s are
+  always redacted (even with `include_record_in_errors: true`), and stacktrace
+  entries carry arities instead of arguments. Exceptions raised by your own source or
+  database driver are passed through unchanged.
   """
 
   @prefix [:beam_export, :export]
 
-  @doc "Emits the start event."
-  def start(destination, opts \\ []) do
+  @doc false
+  def start(destination, opts) do
     :telemetry.execute(
       @prefix ++ [:start],
       %{system_time: System.system_time()},
@@ -31,8 +46,8 @@ defmodule BeamExport.Telemetry do
     )
   end
 
-  @doc "Emits chunk measurement."
-  def chunk(destination, rows, bytes, _opts \\ []) do
+  @doc false
+  def chunk(destination, rows, bytes, _opts) do
     :telemetry.execute(
       @prefix ++ [:chunk],
       %{rows: rows, bytes: bytes},
@@ -40,8 +55,8 @@ defmodule BeamExport.Telemetry do
     )
   end
 
-  @doc "Emits stop event with total metrics."
-  def stop(destination, %{duration: duration, rows: rows, bytes: bytes}, opts \\ []) do
+  @doc false
+  def stop(destination, %{duration: duration, rows: rows, bytes: bytes}, opts) do
     :telemetry.execute(
       @prefix ++ [:stop],
       %{duration: duration, rows: rows, bytes: bytes},
@@ -52,8 +67,8 @@ defmodule BeamExport.Telemetry do
     )
   end
 
-  @doc "Emits exception event with sensitive row values redacted."
-  def exception(destination, start_time, error, stacktrace, opts \\ []) do
+  @doc false
+  def exception(destination, start_time, error, stacktrace, opts) do
     duration = System.monotonic_time() - start_time
 
     :telemetry.execute(
@@ -63,21 +78,15 @@ defmodule BeamExport.Telemetry do
         destination: destination,
         kind: :error,
         reason: sanitize_reason(error),
-        stacktrace: stacktrace,
+        stacktrace: BeamExport.Errors.redact_stacktrace(stacktrace),
         format: Keyword.get(opts, :format, :csv)
       }
     )
   end
 
-  # Redact record content in MappingError to ensure PII and sensitive data
-  # never leak into telemetry handlers, loggers, or APM monitoring tools.
-  defp sanitize_reason(%BeamExport.MappingError{} = err) do
-    %BeamExport.MappingError{
-      message: "Failed to map record: #{inspect(err.original_error)}",
-      original_error: err.original_error,
-      record: :redacted
-    }
-  end
-
+  # Mapping errors are always redacted here, even when `include_record_in_errors: true`
+  # was given: that option is for the returned/raised error, not for telemetry
+  # handlers, which typically forward to logs and APM tools.
+  defp sanitize_reason(%BeamExport.MappingError{} = err), do: BeamExport.MappingError.redact(err)
   defp sanitize_reason(other), do: other
 end

@@ -1,11 +1,5 @@
 defmodule BeamExport.AdversarialTest do
-  use ExUnit.Case
-  alias BeamExport.Test.Repo
-  alias BeamExport.Test.User
-
-  setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-  end
+  use BeamExport.DataCase, async: false
 
   describe "BE-001: Nested transaction safety and pool exhaustion" do
     test "to_file inside an existing Repo.transaction does not deadlock", %{test: test} do

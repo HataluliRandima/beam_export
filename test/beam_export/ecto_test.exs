@@ -1,39 +1,11 @@
 defmodule BeamExport.EctoTest do
-  use ExUnit.Case, async: false
+  use BeamExport.DataCase, async: false
 
-  import Ecto.Query
-  alias BeamExport.Test.Repo
-  alias BeamExport.Test.User
-  alias BeamExport.Test.Post
   alias BeamExport.Test.CSV, as: TestParser
 
   setup do
-    # Explicitly checkout connection for test case
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-    Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
-
-    # Clear users and posts
-    Repo.delete_all(Post)
-    Repo.delete_all(User)
-
-    # Insert test dataset: 50 users
-    users =
-      for i <- 1..50 do
-        role = if rem(i, 2) == 0, do: "admin", else: "member"
-        %{name: "User #{i}", email: "user#{i}@example.com", role: role}
-      end
-
-    Repo.insert_all(
-      User,
-      Enum.map(
-        users,
-        &Map.merge(&1, %{
-          inserted_at: ~N[2026-01-01 00:00:00],
-          updated_at: ~N[2026-01-01 00:00:00]
-        })
-      )
-    )
-
+    # 50 users; even ids are admins.
+    insert_users(50)
     :ok
   end
 

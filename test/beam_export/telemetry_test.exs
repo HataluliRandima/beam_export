@@ -1,8 +1,13 @@
 defmodule BeamExport.TelemetryTest do
   use ExUnit.Case, async: false
 
+  # Telemetry handlers run in the process that emits the event, so only events
+  # emitted by this test's own process are forwarded. Events from other tests
+  # running concurrently are ignored.
   def handle_telemetry_event(event, measurements, metadata, %{test_pid: test_pid}) do
-    send(test_pid, {:telemetry_event, event, measurements, metadata})
+    if self() == test_pid do
+      send(test_pid, {:telemetry_event, event, measurements, metadata})
+    end
   end
 
   setup do

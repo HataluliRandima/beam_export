@@ -1,9 +1,7 @@
 defmodule BeamExport.Destination.FileTest do
-  use ExUnit.Case, async: false
+  use BeamExport.DataCase, async: false
 
   alias BeamExport.Test.CSV, as: TestParser
-  alias BeamExport.Test.Repo
-  alias BeamExport.Test.User
 
   setup do
     tmp_dir = Path.join(System.tmp_dir!(), "beam_export_file_test_#{:rand.uniform(100_000)}")
@@ -90,26 +88,7 @@ defmodule BeamExport.Destination.FileTest do
     end
 
     test "writes an Ecto query to file directly", %{tmp_dir: tmp_dir} do
-      Ecto.Adapters.SQL.Sandbox.checkout(Repo)
-      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
-
-      Repo.delete_all(User)
-
-      users =
-        for i <- 1..20 do
-          %{name: "User #{i}", email: "user#{i}@example.com", role: "member"}
-        end
-
-      Repo.insert_all(
-        User,
-        Enum.map(
-          users,
-          &Map.merge(&1, %{
-            inserted_at: ~N[2026-01-01 00:00:00],
-            updated_at: ~N[2026-01-01 00:00:00]
-          })
-        )
-      )
+      insert_users(20)
 
       out_path = Path.join(tmp_dir, "ecto_users.csv")
 
