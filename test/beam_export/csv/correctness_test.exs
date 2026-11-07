@@ -46,7 +46,8 @@ defmodule BeamExport.CSV.CorrectnessTest do
       {time_us, text} = :timer.tc(fn -> Formatter.format(huge) end)
       assert text == "5E+1000000000"
       assert time_us < 100_000
-      assert Decimal.equal?(Decimal.new(text), huge)
+      # Not re-parsed with Decimal.new/1: Decimal >= 3.0 rejects such input by default
+      # (CVE-2026-32686), which is exactly why BeamExport must not build it in full.
     end
 
     test "values just inside and outside the plain-notation width" do
@@ -56,9 +57,9 @@ defmodule BeamExport.CSV.CorrectnessTest do
       refute Formatter.format(inside) =~ "E"
       # One more digit: scientific.
       assert Formatter.format(Decimal.new(1, 1, 6_178)) == "1E+6178"
-      # A 200-digit coefficient takes the precise path.
+      # A 200-digit coefficient takes the precise path (plain notation, exact digits).
       big = Decimal.new(1, Integer.pow(10, 199) + 7, -2)
-      assert Decimal.equal?(Decimal.new(Formatter.format(big)), big)
+      assert Formatter.format(big) == "1" <> String.duplicate("0", 197) <> ".07"
     end
 
     property "every decimal round-trips through its CSV text" do

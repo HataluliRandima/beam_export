@@ -49,6 +49,7 @@ defmodule BeamExport.MixProject do
       {:ecto_sqlite3, "~> 0.15", only: [:dev, :test]},
       {:benchee, "~> 1.0", only: [:dev, :test]},
       {:stream_data, "~> 1.0", only: [:dev, :test]},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end
@@ -61,7 +62,7 @@ defmodule BeamExport.MixProject do
 
   defp package do
     [
-      maintainers: ["BeamExport Contributors"],
+      maintainers: ["HataluliRandima"],
       licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => @source_url,
