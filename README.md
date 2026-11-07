@@ -297,6 +297,10 @@ width and mapper. `bench/export_bench.exs` contains a reproducible benchmark
 * **`send_chunked_export/4`** holds a database connection for the whole download. Use
   it only for fast, trusted clients.
 * **`to_stream/2` and `send_chunked_export/4` emit no telemetry.**
+* **Atomic writes and power loss.** `to_file/3` syncs the file to disk before the
+  rename, but not the parent directory (Erlang/OTP has no portable way to do that). On
+  some filesystems, a crash or power loss right after the rename can leave the
+  previous file in place.
 * **`meta.rows` includes the header row.**
 * CSV only for now; see [ROADMAP.md](ROADMAP.md).
 

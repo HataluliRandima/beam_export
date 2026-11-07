@@ -185,7 +185,10 @@ defmodule BeamExport do
   written.
 
   By default the write is atomic: a failed export leaves an existing file at `path`
-  untouched and never leaves partial or temporary files behind.
+  untouched and never leaves partial or temporary files behind. The file is synced
+  to disk before the rename; the parent directory is not (there is no portable way to
+  do so), so on some filesystems a power loss right after the rename can leave the
+  previous file in place.
 
   See the module documentation for options.
   """
